@@ -1,0 +1,6 @@
+.venv/
+.gradio/
+data/*.csv
+__pycache__/
+*.pyc
+models/
