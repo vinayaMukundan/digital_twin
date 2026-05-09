@@ -4,6 +4,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from src.rag import VitaTwinRAG  # Import the new class
+from fastapi.responses import FileResponse
+
 
 # IMPORTING YOUR CUSTOM MODULES
 try:
@@ -36,6 +38,11 @@ print(f"--- Loading VitaTwin Engines from: {MODEL_PATH} ---")
 # Global variables for engines
 analyzer_engine = None
 rag_engine = None
+
+
+@app.get("/")
+async def read_index():
+    return FileResponse('index.html')
 
 @app.on_event("startup")
 async def load_engines():
@@ -97,4 +104,4 @@ async def analyze_text(request: AnalyzeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=7860)
