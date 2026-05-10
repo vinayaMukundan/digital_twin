@@ -11,3 +11,10 @@ sentence-transformers
 lime
 datasets
 ollama  # Note: Ollama requires a running local server, see 'The Challenge' below
+fastapi
+uvicorn
+langchain-huggingface
+langchain-community
+langchain-core
+chromadb
+sentence-transformers
