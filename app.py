@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from src.rag import VitaTwinRAG  # Import the new class
 from fastapi.responses import FileResponse
+import traceback
 
 
 # IMPORTING YOUR CUSTOM MODULES
@@ -57,6 +58,8 @@ async def load_engines():
         print("--- Engines Loaded Successfully ---")
     except Exception as e:
         print(f"CRITICAL ERROR LOADING MODELS: {e}")
+        traceback.print_exc() 
+
 
 class AnalyzeRequest(BaseModel):
     text: str
@@ -84,6 +87,8 @@ async def ask_rag(request: AskRequest):
 
 @app.post("/analyze")
 async def analyze_text(request: AnalyzeRequest):
+    if analyzer_engine is None:
+        raise HTTPException(status_code=503, detail="Analyzer engine failed to load. Check model path.")
     try:
         # STEP 1: Get the raw Risk Factor and Insight from prediction.py
         raw_analysis = analyzer_engine.get_risk_factor(request.text)
