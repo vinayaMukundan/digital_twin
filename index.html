@@ -3,46 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VitaTwin - Digital Health Twin</title>
+    <title>MindLens - Digital Health Twin</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #f4f7f6; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        textarea { width: 100%; height: 100px; padding: 12px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px; }
+        textarea { width: 100%; height: 100px; padding: 12px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px; box-sizing: border-box; }
         button { background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: bold; }
         button:hover { background: #0056b3; }
         .result-box { margin-top: 20px; display: none; }
-        .tag { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.8em; font-weight: bold; }
-        .high { background: #ffebee; color: #c62828; }
-        .stable { background: #e8f5e9; color: #2e7d32; }
+        /* Crisis Indicator (Status) */
+        .status-crisis {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 6px;
+            font-weight: bold;
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef9a9a;
+        }
+        .status-stable {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 6px;
+            font-weight: bold;
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #a5d6a7;
+        }
+        /* Severity Badge for Risk Level */
+        .severity-badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 0.82em;
+            font-weight: bold;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .severity-low      { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+        .severity-moderate { background: #fff8e1; color: #f57f17; border: 1px solid #ffe082; }
+        .severity-high     { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+        .severity-critical { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+        /* Clinical Insight — normal text, not italic */
+        #insight { color: #333; font-style: normal; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h1>VitaTwin Intelligence</h1>
+        <h1>MindLens Intelligence</h1>
         <p>Enter patient notes below for AI-powered risk analysis.</p>
         <textarea id="userInput" placeholder="Type user text here..."></textarea>
         <button onclick="analyzeText()">Analyze Health Risk</button>
 
         <div id="result" class="result-box">
             <h3>Analysis Report</h3>
-            <p><strong>Status:</strong> <span id="label"></span></p>
-            <p><strong>Risk Level:</strong> <span id="risk" class="tag"></span></p>
-            <p><strong>Confidence Score:</strong> <span id="confidence-pct"></span></p>
-            
+            <p><strong>Prediction:</strong> <span id="label"></span></p>
+            <p><strong>Severity:</strong> <span id="risk" class="severity-badge"></span></p>
+
             <hr>
 
             <p><strong>XAI Explanation:</strong> <span id="explanation"></span></p>
-            <p><strong>Clinical Insight:</strong> <span id="insight" style="color: #555; font-style: italic;"></span></p>
+            <p><strong>Clinical Insight:</strong> <span id="insight"></span></p>
         </div>
     </div>
 
-    <!-- Add this below the previous .card div -->
     <div class="card" style="margin-top: 20px;">
-        <h2>Ask VitaTwin (RAG)</h2>
+        <h2>MindLens Query Assistant</h2>
         <p>Ask a specific question about the note above.</p>
         <input type="text" id="userQuestion" placeholder="e.g., What is the primary stressor?" style="width: 80%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
         <button onclick="askQuestion()">Ask AI</button>
-        
+
         <div id="rag-result" style="margin-top: 15px; display: none; background: #eef2f7; padding: 15px; border-radius: 8px;">
             <strong>AI Answer:</strong>
             <p id="answer-text"></p>
@@ -50,18 +80,22 @@
     </div>
 
     <script>
-
+        function getSeverityClass(riskFactor) {
+            const r = (riskFactor || '').toUpperCase();
+            if (r.includes('CRITICAL')) return 'severity-critical';
+            if (r.includes('HIGH'))     return 'severity-high';
+            if (r.includes('MODERATE')) return 'severity-moderate';
+            return 'severity-low';
+        }
         async function askQuestion() {
             const note = document.getElementById('userInput').value;
             const question = document.getElementById('userQuestion').value;
             const answerDiv = document.getElementById('rag-result');
             const answerText = document.getElementById('answer-text');
-    
             if (!note || !question) {
                 alert("Please provide both a patient note and a question.");
                 return;
             }
-    
             try {
                 const response = await fetch('/ask', {
                     method: 'POST',
@@ -69,56 +103,47 @@
                     body: JSON.stringify({ text: note, question: question })
                 });
                 const data = await response.json();
-
-                console.log("DATA RAG : ",data)
                 answerText.innerText = data.answer;
                 answerDiv.style.display = 'block';
             } catch (error) {
-                console.log("Vinaya ERRROR : ",error)
+                console.log("Error:", error);
                 alert("RAG API Error");
             }
         }
-
-
         async function analyzeText() {
             const btn = document.querySelector('button');
             const input = document.getElementById('userInput');
             const resBox = document.getElementById('result');
-        
             if (!input.value.trim()) return;
-        
-            // 1. Enter "Loading" State
             btn.disabled = true;
-            btn.innerText = "Analyzing... (this take a few seconds)";
-            resBox.style.opacity = "0.5"; // Dim the old results
-        
+            btn.innerText = "Analyzing... (this may take a few seconds)";
+            resBox.style.opacity = "0.5";
             try {
                 const response = await fetch('/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text: input.value })
                 });
-        
                 const data = await response.json();
-        
-                // 2. Update UI with new data
-                document.getElementById('label').innerText = data.prediction.label;
-                document.getElementById('risk').innerText = data.prediction.risk_factor;
-                
-                const confPercent = (parseFloat(data.prediction.confidence) * 100).toFixed(2) + "%";
-                document.getElementById('confidence-pct').innerText = confPercent;
-                
-                document.getElementById('risk').className = 'tag ' + 
-                    (data.prediction.risk_factor.includes('HIGH') ? 'high' : 'stable');
+                // Crisis Indicator with red/green highlight
+                const labelEl = document.getElementById('label');
+                const labelText = data.prediction.label;
+                const isCrisis = labelText.toUpperCase().includes('CRISIS') ||
+                                 data.prediction.risk_factor.toUpperCase().includes('HIGH') ||
+                                 data.prediction.risk_factor.toUpperCase().includes('CRITICAL');
+                labelEl.innerHTML = `<span class="${isCrisis ? 'status-crisis' : 'status-stable'}">${labelText}</span>`;
+                // Severity Badge
+                const riskEl = document.getElementById('risk');
+                riskEl.innerText = data.prediction.risk_factor;
+                riskEl.className = 'severity-badge ' + getSeverityClass(data.prediction.risk_factor);
                 document.getElementById('explanation').innerText = data.explanation;
                 document.getElementById('insight').innerText = data.insight;
-                
                 resBox.style.display = 'block';
                 resBox.style.opacity = "1";
             } catch (error) {
+                console.error("Full error:", error);
                 alert("Error connecting to API");
             } finally {
-                // 3. Reset Button so user can type and click again!
                 btn.disabled = false;
                 btn.innerText = "Analyze Health Risk";
             }
