@@ -6,7 +6,6 @@ from sentence_transformers import SentenceTransformer, util
 
 class VitaTwinAnalyzer:
     def __init__(self, model_path="./models/bert_mental_health"):
-        print("Initializing VitaTwin Intelligence Engine...")
         self.tokenizer = BertTokenizer.from_pretrained(model_path)
         self.model = BertForSequenceClassification.from_pretrained(model_path)
         
@@ -21,8 +20,6 @@ class VitaTwinAnalyzer:
         self.class_names = ['Normal', 'Risk']
         self.explainer = LimeTextExplainer(class_names=self.class_names)
         
-        # New: Initialize Sentence Transformer for Insight Layer
-        print("Loading Insight Layer (Sentence Transformers)...")
         self.insight_model = SentenceTransformer('all-MiniLM-L6-v2')
         
         # Define clinical categories and their corresponding "Human-Readable" insights
@@ -61,38 +58,38 @@ class VitaTwinAnalyzer:
         probs = F.softmax(outputs.logits, dim=1)
         return probs.cpu().numpy()
 
-    def get_explanation(self, text):
-        """Runs LIME and returns a formatted explanation sentence."""
-        # num_samples=100 for speed; increase to 500 for better accuracy
-        exp = self.explainer.explain_instance(
-            text, 
-            self._lime_predictor, 
-            num_features=5, 
-            num_samples=100
-        )
+    # def get_explanation(self, text):
+    #     """Runs LIME and returns a formatted explanation sentence."""
+    #     # num_samples=100 for speed; increase to 500 for better accuracy
+    #     exp = self.explainer.explain_instance(
+    #         text, 
+    #         self._lime_predictor, 
+    #         num_features=5, 
+    #         num_samples=100
+    #     )
         
-        explanation_list = exp.as_list()
-        # 1. Filter for positive weights and SORT by weight descending
-        # LIME usually returns them sorted, but this ensures the 'top' words are truly the highest impact
-        risk_terms = sorted(
-            [(word, weight) for word, weight in explanation_list if weight > 0],
-            key=lambda x: x[1],
-            reverse=True
-        )
+    #     explanation_list = exp.as_list()
+    #     # 1. Filter for positive weights and SORT by weight descending
+    #     # LIME usually returns them sorted, but this ensures the 'top' words are truly the highest impact
+    #     risk_terms = sorted(
+    #         [(word, weight) for word, weight in explanation_list if weight > 0],
+    #         key=lambda x: x[1],
+    #         reverse=True
+    #     )
 
-        if not risk_terms:
-            return "The model reached this conclusion based on overall sentence context rather than specific keywords."
+    #     if not risk_terms:
+    #         return "The model reached this conclusion based on overall sentence context rather than specific keywords."
         
-        # 2. Format the words with their scores: e.g., 'word' (0.15)
-        formatted_terms = [f"'{word}' ({weight:.2f})" for word, weight in risk_terms[:5]]
+    #     # 2. Format the words with their scores: e.g., 'word' (0.15)
+    #     formatted_terms = [f"'{word}' ({weight:.2f})" for word, weight in risk_terms[:5]]
 
-        # 3. Join into a natural sentence
-        if len(formatted_terms) > 1:
-            words_str = ", ".join(formatted_terms[:-1]) + f" and {formatted_terms[-1]}"
-        else:
-            words_str = formatted_terms[0]
+    #     # 3. Join into a natural sentence
+    #     if len(formatted_terms) > 1:
+    #         words_str = ", ".join(formatted_terms[:-1]) + f" and {formatted_terms[-1]}"
+    #     else:
+    #         words_str = formatted_terms[0]
 
-        return f"The model identified this pattern primarily due to terms like {words_str}."
+    #     return f"The model identified this pattern primarily due to terms like {words_str}."
      
          
     def get_risk_factor(self, text):
@@ -113,41 +110,44 @@ class VitaTwinAnalyzer:
         
         if label_id == 0:  # Predicted as NORMAL
             risk_level = "STABLE"
-            insight = "No significant mental health risk detected."
         else:  # Predicted as POISONOUS/AT-RISK
             if conf_score > 0.90:
                 risk_level = "CRITICAL/HIGH RISK"
-                insight = "Urgent: Strong signals of severe distress. Immediate intervention advised."
             elif conf_score > 0.70:
                 risk_level = "MODERATE RISK"
-                insight = "Significant signs of instability. Suggest closer monitoring."
             else:
                 # Even with low confidence, if BERT picks 'Poisonous', we shouldn't ignore it
-                risk_level = "EVALUATION NEEDED"
-                insight = "Potential distress detected, but model confidence is low. Human review required."
+                risk_level = "EVALUATION NEEDED."
 
         # 5. Get LIME Explanation
-        explanation_sentence = self.get_explanation(text)
+        # explanation_sentence = self.get_explanation(text)
         
         # 3. Get LIME data (Revised to get raw words for the Insight Layer)
         exp = self.explainer.explain_instance(text, self._lime_predictor, num_features=5, num_samples=100)
         explanation_list = exp.as_list()
+        top_terms = sorted(explanation_list, key=lambda x: abs(x[1]), reverse=True)[:5]
+
+        formatted_terms = []
+        for word, weight in top_terms:
+            label = "Risk" if weight > 0 else "Stable"
+            formatted_terms.append(f"'{word}' ({weight:.2f} [{label}])")
+        
         risk_terms = sorted([(w, s) for w, s in explanation_list if s > 0], key=lambda x: x[1], reverse=True)
 
         # 4. GET THE INSIGHT (Calling Part 4)
         if label_id == 1:
             clinical_insight = self._get_clinical_insight(risk_terms)
         else:
-            clinical_insight = "Stable: No clinical archetypes triggered."
+            clinical_insight = "No clinical archetypes triggered."
 
         # 5. Format existing LIME explanation sentence
         formatted_terms = [f"'{word}' ({weight:.2f})" for word, weight in risk_terms[:5]]
         words_str = ", ".join(formatted_terms)
-        explanation_sentence = f"Pattern triggered by: {words_str}"
+        explanation_sentence = f"Prediction influenced by : {words_str}"
         
         return {
             "text": text,
-            "label": "Poisonous/At-Risk" if label_id == 1 else "Normal",
+            "label": "Crisis Indicator" if label_id == 1 else "Healthy",
             "confidence": f"{conf_score:.2%}",
             "risk_factor": risk_level,
             "insight": clinical_insight,
